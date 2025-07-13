@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Header from './components/Header';
 import ProductCard from './components/ProductCard';
-import Loading from './components/loading';
+import CartSidebar from './components/CartSidebar';
+import ProductFilter from './components/ProductFilter';
+import SearchBar from './components/SearchBar';
+import Loading from './components/Loading';
+import Toast from './components/Toast';
 import { getProducts, addToCart, getCart } from './utils/api';
 import './App.css';
 
@@ -11,6 +15,10 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCart, setShowCart] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [sort, setSort] = useState('name');
+  const [toast, setToast] = useState({ message: '', type: 'success', isVisible: false });
 
   // Generate unique session ID for this browser session
   const [userSession] = useState(() => {
@@ -45,15 +53,21 @@ function App() {
     }
   };
 
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type, isVisible: true });
+  };
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, isVisible: false }));
+  };
+
   const handleAddToCart = async (product) => {
     try {
       await addToCart(product.id, 1, userSession);
       await loadCart(); // Refresh cart
-      
-      // Show success message
-      alert(`${product.name} added to cart!`);
+      showToast(`${product.name} added to cart!`, 'success');
     } catch (err) {
-      alert('Failed to add product to cart. Please try again.');
+      showToast('Failed to add product to cart. Please try again.', 'error');
       console.error('Error adding to cart:', err);
     }
   };
@@ -61,6 +75,70 @@ function App() {
   const handleCartClick = () => {
     setShowCart(!showCart);
   };
+
+  const handleSearch = (term) => {
+    setSearchTerm(term);
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+  };
+
+  const handleSortChange = (newSort) => {
+    setSort(newSort);
+  };
+
+  // Filter and sort products
+  const filteredAndSortedProducts = useMemo(() => {
+    let filtered = products;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(product =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply sustainability filter
+    if (filter !== 'all') {
+      filtered = filtered.filter(product => {
+        const score = product.sustainability_index;
+        switch (filter) {
+          case 'eco-friendly':
+            return score >= 7.5;
+          case 'moderate':
+            return score >= 4.5 && score < 7.5;
+          case 'low-sustainability':
+            return score >= 0 && score < 4.5;
+          case 'not-rated':
+            return score === null || score === undefined;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sort) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'price-low':
+          return a.price - b.price;
+        case 'price-high':
+          return b.price - a.price;
+        case 'sustainability-high':
+          return (b.sustainability_index || 0) - (a.sustainability_index || 0);
+        case 'sustainability-low':
+          return (a.sustainability_index || 0) - (b.sustainability_index || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [products, searchTerm, filter, sort]);
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
@@ -105,7 +183,7 @@ function App() {
           <p className="text-xl md:text-2xl mb-8">
             Every product rated for environmental impact using advanced AI
           </p>
-          <div className="flex justify-center space-x-4 text-sm md:text-base">
+          <div className="flex flex-wrap justify-center gap-4 text-sm md:text-base">
             <div className="flex items-center space-x-2">
               <span className="text-2xl">🟢</span>
               <span>Eco-Friendly (7.5-10)</span>
@@ -122,67 +200,70 @@ function App() {
         </div>
       </section>
 
-      {/* Products Section */}
-      <section id="products" className="py-12">
+      {/* Search and Filter Section */}
+      <section className="py-8 bg-white">
         <div className="container mx-auto px-4">
-          <h3 className="text-3xl font-bold text-center mb-8 text-gray-800">
-            Our Products
-          </h3>
-          
-          {/* Product Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onAddToCart={handleAddToCart}
-              />
-            ))}
+          <div className="max-w-2xl mx-auto mb-6">
+            <SearchBar onSearch={handleSearch} />
           </div>
+          
+          <ProductFilter
+            onFilterChange={handleFilterChange}
+            currentFilter={filter}
+            onSortChange={handleSortChange}
+            currentSort={sort}
+          />
         </div>
       </section>
 
-      {/* Cart Sidebar/Modal (placeholder for now) */}
-      {showCart && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
-          <div className="bg-white w-full max-w-md h-full overflow-y-auto">
-            <div className="p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Shopping Cart</h3>
-                <button
-                  onClick={() => setShowCart(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-              
-              {cart.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  Your cart is empty
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                      <img 
-                        src={item.image_url} 
-                        alt={item.name}
-                        className="w-16 h-16 object-cover rounded"
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-semibold">{item.name}</h4>
-                        <p className="text-gray-600">${item.price}</p>
-                        <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* Products Section */}
+      <section id="products" className="py-12">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-3xl font-bold text-gray-800">
+              Our Products
+            </h3>
+            <span className="text-gray-600">
+              {filteredAndSortedProducts.length} products found
+            </span>
           </div>
+          
+          {/* Product Grid */}
+          {filteredAndSortedProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🔍</div>
+              <p className="text-gray-500 text-lg mb-4">No products found</p>
+              <p className="text-gray-400">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredAndSortedProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </section>
+
+      {/* Cart Sidebar */}
+      <CartSidebar
+        isOpen={showCart}
+        onClose={() => setShowCart(false)}
+        cart={cart}
+        onCartUpdate={loadCart}
+      />
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 }
