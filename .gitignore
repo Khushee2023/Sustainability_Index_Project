@@ -1,2 +1,10 @@
 backend/node_modules/
 frontend/node_modules/
+
+flask_api/model/
+*.safetensors
+*.bin
+*.model
+*.pkl
+*.h5
+node_modules/
