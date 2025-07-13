@@ -19,14 +19,17 @@ const SustainabilityBadge = ({ score, size = 'normal' }) => {
     gray: 'bg-gray-100 text-gray-600 border-gray-300'
   };
 
+  // Helper function to format score safely
+  const formatScore = (score) => {
+    if (score === null || score === undefined) return 'N/A';
+    const numScore = Number(score);
+    return isNaN(numScore) ? 'N/A' : numScore.toFixed(1);
+  };
+
   return (
-    <div className={`
-      inline-flex items-center gap-2 rounded-full border-2 font-semibold
-      ${sizeClasses[size]}
-      ${colorClasses[color]}
-    `}>
-      <span className="text-lg">{badge}</span>
-      <span>{score !== null && score !== undefined ? score.toFixed(1) : 'N/A'}</span>
+    <div className={`inline-flex items-center gap-1 rounded-full border font-medium ${sizeClasses[size]} ${colorClasses[color]}`}>
+      {badge}
+      {formatScore(score)}
       {size !== 'small' && <span className="text-xs opacity-75">({text})</span>}
     </div>
   );
